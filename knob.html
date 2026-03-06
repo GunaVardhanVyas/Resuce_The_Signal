@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rescue the Signal - Controller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: sans-serif; touch-action: manipulation; }
+        input[type=range] { width: 100%; accent-color: #38bdf8; height: 1.5rem; }
+        .slider-card { background: #1e293b; padding: 1rem; border-radius: 12px; border: 1px solid #334155; }
+    </style>
+</head>
+<body class="flex flex-col items-center p-6">
+    <h1 class="text-xl font-bold text-sky-400 mb-2">RESCUE THE SIGNAL</h1>
+    
+    <div class="flex gap-4 mb-6">
+        <button onclick="initGrid(4)" class="px-6 py-2 bg-slate-700 rounded-full active:bg-sky-600">2x2 Mode</button>
+        <button onclick="initGrid(9)" class="px-6 py-2 bg-slate-700 rounded-full active:bg-sky-600">3x3 Mode</button>
+    </div>
+
+    <div id="gridContainer" class="grid gap-3 w-full max-w-md"></div>
+
+    <div class="mt-8 p-6 bg-sky-900/20 border-2 border-sky-500/30 rounded-2xl w-full max-w-md text-center">
+        <div class="text-xs uppercase text-sky-400 tracking-widest mb-1">Current SNR</div>
+        <div id="snrDisplay" class="text-5xl font-mono font-bold">0.00%</div>
+    </div>
+
+    <script>
+        // const socket = io("http://127.94.0.1:5690"); 
+        const socket = io("http://LAPTOP_IP:5690");
+
+        let currentElements = 4;
+
+        function initGrid(count) {
+            currentElements = count;
+            const container = document.getElementById('gridContainer');
+            container.innerHTML = '';
+            container.className = `grid gap-3 w-full max-w-md ${count === 4 ? 'grid-cols-2' : 'grid-cols-3'}`;
+            for (let i = 0; i < count; i++) {
+                container.innerHTML += `
+                    <div class="slider-card">
+                        <div class="text-[10px] text-slate-500 mb-1 uppercase">Element ${i+1}</div>
+                        <input type="range" min="0" max="360" value="0" oninput="sendUpdate()" class="phase-slider">
+                    </div>`;
+            }
+        }
+
+        function sendUpdate() {
+            const sliders = document.querySelectorAll('.phase-slider');
+            const phases = Array.from(sliders).map(s => parseFloat(s.value));
+            socket.emit('phase_update', { phases: phases });
+        }
+
+        socket.on('update_display', (data) => {
+            const display = document.getElementById('snrDisplay');
+            display.innerText = data.snr + "%";
+            display.style.color = data.is_winner ? "#4ade80" : "#f8fafc";
+        });
+
+        function resetPhases() {
+            const sliders = document.querySelectorAll('.phase-slider');
+            sliders.forEach(s => {
+                s.value = Math.floor(Math.random() * 360); // Randomize
+            });
+            sendUpdate();
+        }
+
+        socket.on('update_display', (data) => {
+            const display = document.getElementById('snrDisplay');
+            // Show both for different audiences
+            display.innerHTML = `
+                <span class="text-4xl">${data.snr_percent}%</span>
+                <div class="text-sm text-slate-400">${data.snr_db} dB</div>
+            `;
+            display.style.color = data.is_winner ? "#4ade80" : "#f8fafc";
+        });
+
+        initGrid(4);
+    </script>
+</body>
+</html>

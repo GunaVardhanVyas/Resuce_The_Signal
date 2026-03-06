@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rescue the Signal - Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { margin: 0; background: #0f172a; overflow: hidden; font-family: sans-serif; }
+    </style>
+</head>
+<body>
+<script>
+    // Since this is on the same laptop as the server, localhost works.
+    const socket = io("http://LAPTOP_IP:5690");
+
+    // Initialize all variables to match the Python 'emit' exactly
+    let snr_percent = 0;
+    let snr_db = 0;
+    let res_re = 0;
+    let res_im = 0;
+    let is_winner = false;
+    let vecs = [];
+
+    socket.on('update_display', (data) => {
+        console.log("Data received:", data); // Helpful for debugging in Browser Console (F12)
+        snr_percent = data.snr_percent;
+        snr_db = data.snr_db;
+        res_re = data.res_re;
+        res_im = data.res_im;
+        is_winner = data.is_winner;
+        vecs = data.vecs;
+    });
+
+    function setup() {
+        createCanvas(windowWidth, windowHeight);
+    }
+
+    function draw() {
+        background(15, 23, 42);
+        
+        // --- 1. SET POSITIONS ---
+        const bs = { x: 150, y: height - 150 };
+        const irs = { x: width/2, y: 150 };
+        const ue = { x: width - 150, y: height - 150 };
+
+        // --- 2. DRAW THE OBSTACLE (The Building) ---
+        fill(30, 41, 59); 
+        stroke(51, 65, 85);
+        rect(width/2 - 100, height/2 - 50, 200, height/2 + 50, 15);
+        fill(148, 163, 184); noStroke(); textAlign(CENTER);
+        text("SIGNAL BLOCKED", width/2, height - 100);
+
+        // --- 3. DRAW SIGNAL BEAMS ---
+        // Color shifts based on SNR strength
+        let beamColor = is_winner ? color(74, 222, 128) : lerpColor(color(239, 68, 68), color(56, 189, 248), snr_percent/100);
+        stroke(beamColor);
+        strokeWeight(map(snr_percent, 0, 100, 2, 10));
+        
+        // Only draw if there's some signal
+        if(snr_percent > 0.1) {
+            line(bs.x, bs.y, irs.x, irs.y);
+            line(irs.x, irs.y, ue.x, ue.y);
+        }
+
+        // --- 4. DRAW NODES ---
+        noStroke();
+        fill(255);
+        ellipse(bs.x, bs.y, 40); text("BASE STATION", bs.x, bs.y + 40);
+        
+        fill(56, 189, 248);
+        rect(irs.x - 60, irs.y - 20, 120, 40, 5); 
+        fill(255); text("IRS MIRROR", irs.x, irs.y + 40);
+        
+        fill(255);
+        ellipse(ue.x, ue.y, 30); text("USER (UE)", ue.x, ue.y + 40);
+
+        // --- 5. DRAW SNR GAUGE (Left) ---
+        drawGauge(80, height/2);
+
+        // --- 6. DRAW PHASOR DIAGRAM (Right) ---
+        drawPhasors(width - 150, 200);
+
+        // --- 7. WIN MESSAGE ---
+        if(is_winner) {
+            textAlign(CENTER); textSize(60); fill(74, 222, 128); fontStyle(BOLD);
+            text("SIGNAL RESCUED!", width/2, height/2);
+        }
+    }
+
+    function drawGauge(x, y) {
+        push();
+        translate(x, y);
+        // Background track
+        noFill(); stroke(51, 65, 85); strokeWeight(4);
+        rect(-20, -100, 40, 200, 10);
+        
+        // Filling the gauge
+        fill(is_winner ? '#4ade80' : '#38bdf8');
+        noStroke();
+        let h = map(snr_db, 0, 20, 0, 200); // Mapping 0-20dB to height
+        rect(-20, 100, 40, -h, 10);
+        
+        fill(255); textAlign(CENTER); textSize(14);
+        text(snr_db + " dB", 0, 130);
+        text("POWER", 0, -120);
+        pop();
+    }
+
+    function drawPhasors(x, y) {
+        push();
+        translate(x, y);
+        // Circle background
+        stroke(51, 65, 85); noFill(); strokeWeight(2);
+        circle(0, 0, 160);
+        
+        // Individual Signal Components
+        strokeWeight(1.5);
+        if (vecs) {
+            vecs.forEach(v => {
+                stroke(255, 100);
+                line(0, 0, v.re * 30, -v.im * 30);
+            });
+        }
+
+        // The Combined Signal (Resultant)
+        stroke(74, 222, 128); strokeWeight(4);
+        line(0, 0, res_re * 20, -res_im * 20);
+        
+        fill(255, 150); noStroke(); textSize(12);
+        text("PHASE ALIGNMENT", 0, 100);
+        pop();
+    }
+</script>
+</body>
+</html>
